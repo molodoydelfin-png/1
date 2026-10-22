@@ -1,0 +1,15 @@
+{
+  "name": "s-project-logo-motion",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Deterministic SVG logo animation and frame-accurate exports for S-PROJECT.",
+  "scripts": {
+    "start": "node scripts/server.mjs",
+    "test": "node tests/animation.test.mjs",
+    "export": "node scripts/export.mjs"
+  },
+  "devDependencies": {
+    "playwright-core": "1.62.1"
+  },
+  "engines": { "node": ">=20" }
+}
