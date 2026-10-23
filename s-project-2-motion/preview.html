@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>S-PROJECT 2.0 — предпросмотр</title>
+  <style>
+    :root{color-scheme:dark;font-family:system-ui,sans-serif;background:#171819;color:#eee}
+    body{max-width:1200px;margin:40px auto;padding:0 20px}
+    h1{font-size:18px;font-weight:500;margin:0 0 20px}
+    video{display:block;width:100%;aspect-ratio:16/9;background:#f7f7f7}
+    nav{display:flex;gap:20px;flex-wrap:wrap;margin:22px 0;font-size:14px}
+    a{color:#ddd}p{color:#aaa;font-size:13px}
+  </style>
+</head>
+<body>
+  <h1>S-PROJECT 2.0</h1>
+  <video controls playsinline preload="metadata" poster="exports/s-project-2-final.png">
+    <source src="exports/s-project-2.mp4" type="video/mp4">
+    Ваш браузер не поддерживает MP4. Скачайте видео по ссылке ниже.
+  </video>
+  <nav>
+    <a href="exports/s-project-2.mp4" download>MP4 со звуком</a>
+    <a href="exports/s-project-2-silent.mp4" download>MP4 без звука</a>
+    <a href="exports/s-project-2-final.png" download>Финальный PNG</a>
+    <a href="assets/sound-design.wav" download>Звуковая дорожка WAV</a>
+  </nav>
+  <p>5 секунд · 1920 × 1080 · 30 кадров/с. Нажмите Play и включите звук.</p>
+</body>
+</html>
