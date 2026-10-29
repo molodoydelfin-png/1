@@ -1,0 +1,23 @@
+{
+  "duration": 5,
+  "fps": 30,
+  "frames": 150,
+  "size": [
+    1920,
+    1080
+  ],
+  "source": "assets/source.png",
+  "ray_count": 10,
+  "rotates_whole_symbol": false,
+  "radial_wave_max_amplitude": 0.34,
+  "lengths_settled_at": 2.5,
+  "text": "original custom letter silhouettes recolored white; light scan and temporary edge fragments",
+  "temporary_fragments": 8,
+  "all_effects_gone_at": 3.7,
+  "transparent": [
+    "WebM VP9 alpha",
+    "MOV ProRes 4444 alpha",
+    "final PNG"
+  ],
+  "opaque_preview": "MP4 H.264 on #14171c; not a transparent master"
+}
