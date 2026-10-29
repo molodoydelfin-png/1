@@ -40,7 +40,7 @@ class SweepAnimation(CleanAnimation):
         return index==CURSOR_NODE and DETACH<=t<JOIN
 
     def endpoint(self,index,t):
-        return self.center+(self.endpoints[index]-self.center)*self.scales(t)[index]
+        return self.node_positions(t,self.scales(t))[index]
 
     def cursor_position(self,t):
         start=self.endpoint(CURSOR_NODE,DETACH)
@@ -118,9 +118,12 @@ class SweepAnimation(CleanAnimation):
         over(canvas,self.star_frame(t),self.star_box[0],self.star_box[1])
         over(canvas,self.text_frame(t),self.text_left,self.text_top)
         if DETACH<=t<JOIN:
-            sprite,x,y=self.cursor_sprite(t)
+            sprite,x,y=self.cursor_layer(t)
             over(canvas,sprite,x,y)
         return canvas
+
+    def cursor_layer(self,t):
+        return self.cursor_sprite(t)
 
 
 def render(four_k=False):

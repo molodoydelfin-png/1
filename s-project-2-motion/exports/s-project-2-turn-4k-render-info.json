@@ -1,0 +1,19 @@
+{
+  "duration": 5,
+  "fps": 30,
+  "frames": 150,
+  "size": [
+    3840,
+    2160
+  ],
+  "symbol_turn_degrees": 360,
+  "turn_start": 0.35,
+  "turn_end": 3.3,
+  "length_wave_amplitude": 0.08,
+  "rotates_text": false,
+  "symbol_trailing_exposure_seconds": 0.004166666666666667,
+  "cursor_trailing_exposure_seconds": 0.01,
+  "cursor_rejoined_at": 3.48,
+  "final_hold_start": 3.7,
+  "matches_approved_final": true
+}

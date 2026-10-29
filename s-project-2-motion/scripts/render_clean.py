@@ -71,7 +71,7 @@ class CleanAnimation:
         self.units=(ENDPOINTS-CENTER)/self.lengths[:,None]
         self.radii,self.widths=self._measure_geometry()
         self._build_text()
-        self.star_box=tuple(v*OUTPUT_SCALE for v in (210,265,730,800))
+        self.star_box=self.star_bounds()
         self.final_pm=self.composite(5)
         self.final=self.straight(self.final_pm)
 
@@ -130,6 +130,12 @@ class CleanAnimation:
     def node_growth(self,t,growth):
         return growth
 
+    def star_bounds(self):
+        return tuple(v*OUTPUT_SCALE for v in (210,265,730,800))
+
+    def node_positions(self,t,growth):
+        return self.center+(self.endpoints-self.center)*growth[:,None]
+
     def skip_node(self,index,t):
         return False
 
@@ -158,7 +164,7 @@ class CleanAnimation:
         draw=ImageDraw.Draw(mask)
         c=(self.center-np.array([left,top]))*quality
         growth=self.scales(t)
-        positions=self.center+(self.endpoints-self.center)*growth[:,None]
+        positions=self.node_positions(t,growth)
         ray_opacity=ramp(t,.05,.4)
         for p,w in zip(positions,self.widths):
             endpoint=(p-np.array([left,top]))*quality
