@@ -1,0 +1,22 @@
+{
+  "duration": 5,
+  "fps": 30,
+  "frames": 150,
+  "size": [
+    3840,
+    2160
+  ],
+  "motion_reference": "long low-jerk radial expansion and ease-out timing only",
+  "symbol_turn_degrees": 250,
+  "turn_start": 0.18,
+  "turn_end": 3.3,
+  "relative_ray_lengths_preserved_during_motion": true,
+  "independent_ray_oscillation": false,
+  "node_size_pulsation": false,
+  "rotates_text": false,
+  "cursor_rejoined_at": 3.48,
+  "final_hold_start": 3.7,
+  "matches_approved_final": true,
+  "extra_fragments": 0,
+  "quality": "analytic geometry, area antialiasing, lossless transparent master"
+}
