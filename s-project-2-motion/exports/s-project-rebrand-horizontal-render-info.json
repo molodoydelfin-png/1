@@ -1,0 +1,25 @@
+{
+  "duration": 9,
+  "fps": 30,
+  "frames": 270,
+  "size": [
+    3840,
+    2160
+  ],
+  "audio": false,
+  "old_hold_end": 1.18,
+  "symbol_rebuild_end": 4.15,
+  "cursor_detach": 4.15,
+  "text_conversion_start": 5.15,
+  "text_conversion_end": 7.0,
+  "cursor_join": 7.65,
+  "background_transition": [
+    3.8,
+    7.55
+  ],
+  "symbol_turn": "one smooth horizontal 360-degree Y-axis turn with 22% maximum foreshortening",
+  "light_particle": "one endpoint becomes a tapered light ray, rewrites the wordmark, and rejoins",
+  "micro_motion": "1.8% rigid horizontal breathing during wordmark conversion",
+  "exact_new_logo_hold_start": 8.05,
+  "story": "old identity contracts, unfolds in perspective, and is rewritten by one returning node"
+}

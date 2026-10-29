@@ -15,10 +15,10 @@ import render_clean as clean
 from render_clean import CleanAnimation, ROOT, ramp
 
 
-PREFIX = 's-project-rebrand-discoball'
+PREFIX = 's-project-rebrand-horizontal'
 SIZE = (3840, 2160)
 FPS = 30
-DURATION = 8
+DURATION = 9
 FRAMES = FPS * DURATION
 SCALE = 2.0  # motion geometry is authored in the 1920×1080 coordinate system
 OLD_BG = np.array([247, 247, 247], dtype=np.float32)
@@ -26,11 +26,13 @@ NEW_BG = np.array([20, 23, 28], dtype=np.float32)
 OLD_FG = np.array([9, 9, 9], dtype=np.float32)
 NEW_FG = np.array([245, 245, 245], dtype=np.float32)
 
-DETACH = 3.65
-OUT_END = 4.30
-SCAN_START = 4.50
-SCAN_END = 6.05
-JOIN = 6.65
+DETACH = 4.15
+OUT_END = 4.95
+SCAN_START = 5.15
+SCAN_END = 7.00
+JOIN = 7.65
+BG_START = 3.80
+BG_END = 7.55
 
 OLD_CENTER = np.array([103.2 + 203 * 2.4, 61.2 + 205 * 2.4])
 OLD_ENDPOINTS = np.array([
@@ -89,45 +91,40 @@ class RebrandAnimation:
                             occupied[1].max() + 1, occupied[0].max() + 1)
 
     def background_progress(self, t):
-        return ramp(t, 3.45, 3.10)
+        return ramp(t, BG_START, BG_END-BG_START)
 
     def colors(self, t):
         background_progress = self.background_progress(t)
-        foreground_progress = ramp(t, 5.05, 1.25)
+        foreground_progress = ramp(t, 5.85, 1.35)
         bg = np.rint(OLD_BG * (1-background_progress) + NEW_BG * background_progress).astype(np.uint8)
         fg = np.rint(OLD_FG * (1-foreground_progress) + NEW_FG * foreground_progress).astype(np.uint8)
         return tuple(bg), tuple(fg), background_progress
 
     def star_state(self, t):
-        phase = ramp(t, 1.20, 2.45)
-        morph = ramp(t, 1.45, 2.15)
+        phase = ramp(t, 1.25, 2.90)
+        morph = ramp(t, 1.50, 2.35)
         center = OLD_CENTER * (1-morph) + self.new_center * morph
         old_vectors = OLD_ENDPOINTS - OLD_CENTER
         new_vectors = self.new_endpoints - self.new_center
         vectors = old_vectors * (1-morph) + new_vectors * morph
-        # One coherent 360-degree constellation turn. A restrained axial squeeze,
-        # depth scaling and moving highlights make it read as a small disco ball
-        # without ever flattening the sign into an unreadable line.
-        spin = 2*np.pi*phase
-        vectors *= 1 - .08*np.sin(np.pi*phase)**2
-        cs, sn = np.cos(spin), np.sin(spin)
-        x = vectors[:, 0] * cs - vectors[:, 1] * sn
-        y = vectors[:, 0] * sn + vectors[:, 1] * cs
-        x *= 1 - .24*np.sin(np.pi*phase)**2
-        depth = x * .24*np.sin(np.pi*phase)
+        # Horizontal 3D turn around the vertical axis. Ray directions stay as one
+        # coherent sign; only horizontal foreshortening, depth and light change.
+        yaw = 2*np.pi*phase
+        vectors *= 1 - .045*np.sin(np.pi*phase)**2
+        source_x = vectors[:, 0].copy()
+        x = source_x * (1 - .22*np.sin(yaw)**2)
+        y = vectors[:, 1]
+        depth = source_x * .28*np.sin(yaw)
         perspective = (1150 * clean.K) / (1150 * clean.K - depth)
         projected = np.column_stack((x * perspective, y * perspective))
 
-        # While the wordmark is being rewritten, the assembled system remains
-        # alive: one slow opposing length wave plus a sub-two-degree body drift.
-        micro = ramp(t, 3.75, .45) * (1-ramp(t, 6.05, .45))
+        # During the rewrite the assembled system breathes as one rigid object;
+        # no ray receives an independent wobble or changes its direction.
+        micro = ramp(t, 4.30, .55) * (1-ramp(t, 7.00, .55))
         if micro > 0:
-            angles = np.arctan2(new_vectors[:, 1], new_vectors[:, 0])
-            wave_phase = -1.1 + 2*np.pi*(t-3.75)/3.2
-            projected *= (1 + .018*micro*np.cos(angles-wave_phase))[:, None]
-            drift = np.deg2rad(1.4*micro*np.sin(2*np.pi*(t-3.75)/3.6))
-            dc, ds = np.cos(drift), np.sin(drift)
-            projected = projected @ np.array([[dc, ds], [-ds, dc]])
+            breath = np.sin(2*np.pi*(t-4.30)/3.8)
+            projected[:, 0] *= 1 - .018*micro*(.5+.5*breath)
+            projected *= 1 + .005*micro*breath
         points = center + projected
         widths = np.full(10, 3.6 * 2.4) * (1-morph) + self.new_widths * morph
         radii = np.full(10, 7.1 * 2.4) * (1-morph) + self.new_radii * morph
@@ -215,11 +212,11 @@ class RebrandAnimation:
         for index, (point, radius) in enumerate(zip(points, radii)):
             if index == 9 and DETACH <= t < JOIN:
                 continue
-            spin_phase = 2*np.pi*ramp(t, 1.20, 2.45)
-            angle = np.arctan2((self.new_endpoints-self.new_center)[index, 1],
-                               (self.new_endpoints-self.new_center)[index, 0])
-            turn_active = np.sin(np.pi*ramp(t, 1.20, 2.45))**2
-            shimmer = .5 + .5*np.cos(angle-spin_phase-.65)
+            turn_phase = ramp(t, 1.25, 2.90)
+            yaw = 2*np.pi*turn_phase
+            local_x = (self.new_endpoints-self.new_center)[index, 0]
+            shimmer = .5 + .5*np.tanh(local_x/80*np.sin(yaw)*2)
+            turn_active = np.sin(np.pi*turn_phase)**2
             node_material = np.clip(material*(.78+.34*shimmer*turn_active), 0, 1)
             sprite, (x, y) = self.node_sprite(point, radius, foreground, node_material)
             layer.alpha_composite(sprite, (x-left, y-top))
@@ -325,7 +322,7 @@ class RebrandAnimation:
             cursor, cursor_position = self.cursor_layer(t, foreground)
             frame.alpha_composite(cursor, cursor_position)
 
-        finish = ramp(t, 6.65, .35)
+        finish = ramp(t, 7.65, .40)
         if finish > 0:
             frame = Image.blend(frame, self.exact_final, finish)
         return frame.convert('RGB')
@@ -361,14 +358,14 @@ def render():
     animation.frame((FRAMES-1)/FPS).save(out / f'{PREFIX}-final.png')
     info = {
         'duration': DURATION, 'fps': FPS, 'frames': FRAMES, 'size': list(SIZE),
-        'audio': False, 'old_hold_end': 1.18, 'symbol_rebuild_end': 3.65,
+        'audio': False, 'old_hold_end': 1.18, 'symbol_rebuild_end': DETACH,
         'cursor_detach': DETACH, 'text_conversion_start': SCAN_START,
         'text_conversion_end': SCAN_END, 'cursor_join': JOIN,
-        'background_transition': [3.45, 6.55],
-        'symbol_turn': 'one rigid 360-degree turn with 24% maximum perspective squeeze',
+        'background_transition': [BG_START, BG_END],
+        'symbol_turn': 'one smooth horizontal 360-degree Y-axis turn with 22% maximum foreshortening',
         'light_particle': 'one endpoint becomes a tapered light ray, rewrites the wordmark, and rejoins',
-        'micro_motion': '1.8% opposing ray wave and 1.4-degree body drift during wordmark conversion',
-        'exact_new_logo_hold_start': 7.0,
+        'micro_motion': '1.8% rigid horizontal breathing during wordmark conversion',
+        'exact_new_logo_hold_start': 8.05,
         'story': 'old identity contracts, unfolds in perspective, and is rewritten by one returning node'
     }
     (out / f'{PREFIX}-render-info.json').write_text(json.dumps(info, indent=2) + '\n')
