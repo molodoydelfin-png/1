@@ -1,0 +1,21 @@
+{
+  "size": [
+    3840,
+    2160
+  ],
+  "fps": 30,
+  "frames": 150,
+  "duration": 5,
+  "motion": "smooth opposing radial length wave, fixed angles, no whole-object rotation",
+  "wave_amplitude": 0.16,
+  "cursor_node": 9,
+  "detach": 1.45,
+  "turn": 2.1,
+  "return_start": 2.18,
+  "text_complete": 3.3,
+  "cursor_rejoined": 3.48,
+  "final_hold": 3.7,
+  "text": "returning cursor reveals original white wordmark right-to-left",
+  "extra_fragments": 0,
+  "quality": "same vector contours and area-antialiasing as approved clean version"
+}

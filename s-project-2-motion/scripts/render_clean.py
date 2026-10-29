@@ -127,6 +127,29 @@ class CleanAnimation:
         rank=(self.lengths-self.lengths.min())/np.ptp(self.lengths)
         return np.array([ramp(t,.22+.05*r,1.48+.10*r) for r in rank])
 
+    def node_growth(self,t,growth):
+        return growth
+
+    def skip_node(self,index,t):
+        return False
+
+    def node_sprite(self,position,radius,opacity):
+        """Shared subpixel sphere rasterizer, including detached-cursor joins."""
+        quality=STAR_SSAA
+        x0=int(np.floor(position[0]-radius-2));y0=int(np.floor(position[1]-radius-2))
+        x1=int(np.ceil(position[0]+radius+2));y1=int(np.ceil(position[1]+radius+2))
+        disk=Image.new('L',((x1-x0)*quality,(y1-y0)*quality))
+        d=ImageDraw.Draw(disk)
+        cx=(position[0]-x0)*quality;cy=(position[1]-y0)*quality;hr=radius*quality
+        d.ellipse((cx-hr,cy-hr,cx+hr,cy+hr),fill=255)
+        a=np.asarray(disk.resize((x1-x0,y1-y0),Image.Resampling.BOX),dtype=np.float32)/255*opacity
+        yy,xx=np.mgrid[y0:y1,x0:x1].astype(np.float32)
+        nx=(xx+.5-position[0])/radius;ny=(yy+.5-position[1])/radius
+        shade=1-.24*np.clip(np.hypot(nx+.3,ny+.4)/1.7,0,1)
+        tile=np.empty((*a.shape,4),np.float32)
+        tile[:,:,:3]=a[:,:,None]*shade[:,:,None];tile[:,:,3]=a
+        return tile,x0,y0
+
     def star_frame(self,t):
         left,top,right,bottom=self.star_box
         width=right-left;height=bottom-top
@@ -145,24 +168,15 @@ class CleanAnimation:
         alpha=np.asarray(mask.resize((width,height),Image.Resampling.BOX),dtype=np.float32)/255
         canvas=np.empty((height,width,4),np.float32)
         canvas[:,:,:3]=alpha[:,:,None]*.94;canvas[:,:,3]=alpha
-        for position,radius,g in zip(positions,self.radii,growth):
+        heads=self.node_growth(t,growth)
+        for index,(position,radius,g) in enumerate(zip(positions,self.radii,heads)):
+            if self.skip_node(index,t):continue
             opacity=ramp(g,.2,.35)
             if opacity<=0:continue
             # Round heads are generated independently: no source-crop tails,
             # cropped ray tips or stretched sphere pixels can break off.
             r=radius*(.9+.1*g)
-            x0=int(np.floor(position[0]-r-2));y0=int(np.floor(position[1]-r-2))
-            x1=int(np.ceil(position[0]+r+2));y1=int(np.ceil(position[1]+r+2))
-            disk=Image.new('L',((x1-x0)*quality,(y1-y0)*quality))
-            d=ImageDraw.Draw(disk)
-            cx=(position[0]-x0)*quality;cy=(position[1]-y0)*quality;hr=r*quality
-            d.ellipse((cx-hr,cy-hr,cx+hr,cy+hr),fill=255)
-            a=np.asarray(disk.resize((x1-x0,y1-y0),Image.Resampling.BOX),dtype=np.float32)/255*opacity
-            yy,xx=np.mgrid[y0:y1,x0:x1].astype(np.float32)
-            nx=(xx+.5-position[0])/r;ny=(yy+.5-position[1])/r
-            shade=1-.24*np.clip(np.hypot(nx+.3,ny+.4)/1.7,0,1)
-            tile=np.empty((*a.shape,4),np.float32)
-            tile[:,:,:3]=a[:,:,None]*shade[:,:,None];tile[:,:,3]=a
+            tile,x0,y0=self.node_sprite(position,r,ramp(g,.2,.35))
             over(canvas,tile,x0-left,y0-top)
         return canvas
 
