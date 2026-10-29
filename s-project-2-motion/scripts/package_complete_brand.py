@@ -16,7 +16,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.append(str(ROOT / '.cache/vector-libs'))
 import cairosvg
 DEST = ROOT / 'brand-assets' / 'S-PROJECT-COMPLETE'
-ARCHIVE = ROOT.parent / 'S-PROJECT-complete-brand-kit.zip'
+ARCHIVE = ROOT.parent / 'S-PROJECT-brand-kit-8K-smooth.zip'
 NS = 'http://www.w3.org/2000/svg'
 ET.register_namespace('', NS)
 CANVAS = (7680, 4320)
