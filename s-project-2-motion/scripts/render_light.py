@@ -223,21 +223,21 @@ class LightAnimation:
         return self.to_output(self.native_frame(t))
 
 
-def encode(frames,out,audio):
+def encode(frames,out,audio,prefix=PREFIX,preview_crf=17,alpha_crf=16,prores_q=9,alpha_lossless=False):
     common=['ffmpeg','-hide_banner','-loglevel','error','-y','-framerate',str(FPS),'-i',str(frames/'%04d.png'),'-i',str(audio)]
     subprocess.run(common+['-map','0:v','-map','1:a','-frames:v','150','-t','5','-c:v','libvpx-vp9','-pix_fmt','yuva420p',
-       '-auto-alt-ref','0','-b:v','0','-crf','16','-row-mt','1','-cpu-used','4','-threads','2',
-       '-c:a','libopus','-b:a','128k',str(out/f'{PREFIX}-alpha.webm')],check=True)
+       '-auto-alt-ref','0','-b:v','0','-crf',str(alpha_crf),*(['-lossless','1'] if alpha_lossless else []),'-row-mt','1','-cpu-used','4','-threads','2',
+       '-c:a','libopus','-b:a','128k',str(out/f'{prefix}-alpha.webm')],check=True)
     print('WebM alpha ready',flush=True)
     subprocess.run(common+['-map','0:v','-map','1:a','-frames:v','150','-t','5','-c:v','prores_ks','-profile:v','4',
-       '-pix_fmt','yuva444p10le','-alpha_bits','16','-qscale:v','9','-threads','2','-c:a','pcm_s16le',
-       str(out/f'{PREFIX}-alpha.mov')],check=True)
+       '-pix_fmt','yuva444p10le','-alpha_bits','16','-qscale:v',str(prores_q),'-threads','2','-c:a','pcm_s16le',
+       str(out/f'{prefix}-alpha.mov')],check=True)
     print('ProRes 4444 alpha ready',flush=True)
     subprocess.run(['ffmpeg','-hide_banner','-loglevel','error','-y','-f','lavfi','-i',
        'color=c=0x14171c:s=1920x1080:r=30:d=5','-framerate','30','-i',str(frames/'%04d.png'),'-i',str(audio),
        '-filter_complex','[0:v][1:v]overlay=shortest=1:format=auto,format=yuv420p[v]',
-       '-map','[v]','-map','2:a','-frames:v','150','-t','5','-c:v','libx264','-crf','17','-preset','medium',
-       '-threads','2','-c:a','aac','-b:a','192k','-movflags','+faststart',str(out/f'{PREFIX}-preview.mp4')],check=True)
+       '-map','[v]','-map','2:a','-frames:v','150','-t','5','-c:v','libx264','-crf',str(preview_crf),'-preset','medium',
+       '-threads','2','-c:a','aac','-b:a','192k','-movflags','+faststart',str(out/f'{prefix}-preview.mp4')],check=True)
     print('Dark MP4 preview ready (opaque preview only)',flush=True)
 
 

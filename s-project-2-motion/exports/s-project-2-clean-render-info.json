@@ -1,0 +1,43 @@
+{
+  "size": [
+    1920,
+    1080
+  ],
+  "fps": 30,
+  "frames": 150,
+  "duration": 5,
+  "text_supersampling": 4,
+  "star_supersampling": 8,
+  "downsampling": "area averaging, no ringing filter",
+  "typography": "original contours traced to Bezier SVG; no font substitution",
+  "motion": "monotonic radial deployment; no spring, reverse movement, oscillation or overshoot",
+  "nodes": "independent analytic circles; no moving source-image fragments",
+  "source_node_radii": [
+    15.175000000000002,
+    15.149999999999999,
+    15.350000000000003,
+    15.350000000000003,
+    14.400000000000002,
+    14.850000000000001,
+    14.9,
+    15.05,
+    14.75,
+    14.75
+  ],
+  "source_ray_widths": [
+    7.500000000000001,
+    7.500000000000001,
+    7.500000000000001,
+    7.500000000000001,
+    7.500000000000001,
+    7.500000000000001,
+    7.500000000000001,
+    7.500000000000001,
+    7.500000000000001,
+    7.500000000000001
+  ],
+  "preview_h264_crf": 8,
+  "alpha_vp9_lossless": true,
+  "temporary_fragments": 0,
+  "final_hold_start": 3.7
+}
