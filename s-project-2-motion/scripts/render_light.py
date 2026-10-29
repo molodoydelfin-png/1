@@ -12,7 +12,7 @@ from PIL import Image
 from scipy import ndimage as nd
 from render import OriginalPixelAnimation, ROOT, CENTER, ENDPOINTS, ROI, CROP_TOP, SIZE, FPS
 
-PREFIX = 's-project-2-light'
+PREFIX = 's-project-2-light-center'
 STAR_BOX = (100, 250, 585, 785)
 TEXT_BOX = (515, 450, 1310, 630)
 
@@ -64,15 +64,15 @@ class LightAnimation:
 
     @staticmethod
     def scales(t):
-        growth=.035+.965*ramp(t,.25,.95)
-        amplitude=.34*ramp(t,.35,.4)*(1-ramp(t,1.65,.85))
+        growth=.035+.965*ramp(t,.25,1.1)
+        amplitude=.20*ramp(t,.35,.4)*(1-ramp(t,1.65,.85))
         phase=-2.4+2*np.pi*1.05*ramp(t,.3,2.15)
         angles=np.arctan2((ENDPOINTS-CENTER)[:,1],(ENDPOINTS-CENTER)[:,0])
         return growth*(1+amplitude*np.cos(angles-phase))
 
-    @staticmethod
-    def beam_position(t):
-        return -70+935*ramp(t,1.85,1.65)
+    def beam_position(self,t):
+        # Radius of two light fronts travelling away from the wordmark center.
+        return -26+(self.beam_radius+52)*ramp(t,1.85,1.65)
 
     def _build_star(self):
         x0,y0,x1,y1=STAR_BOX
@@ -115,34 +115,13 @@ class LightAnimation:
         self.text_alpha[:,:5]=0
         yy,xx=np.mgrid[:y1-y0,:x1-x0].astype(np.float32)
         self.text_x=xx;self.text_y=yy
-        self.field=xx+.12*(yy-85)
         binary=self.text_alpha>.35
+        occupied=np.where(binary)[1]
+        self.beam_center=float((occupied.min()+occupied.max())/2)
+        self.beam_radius=float((occupied.max()-occupied.min())/2)
+        self.field=np.abs(xx-self.beam_center)
         self.edge=(binary & ~nd.binary_erosion(binary,iterations=1)).astype(np.float32)
         self.near=nd.gaussian_filter(self.edge,1.8)
-        self.fragments=[]
-        for i,desired in enumerate([76,160,251,337,425,520,615,735]):
-            column=min(desired,self.text_alpha.shape[1]-5)
-            candidates=np.argwhere(binary[:,column-3:column+4])
-            if not len(candidates):
-                continue
-            ys=candidates[:,0]
-            anchor_y=int(ys.min()+2 if i%2==0 else ys.max()-2)
-            width=7+i%4
-            height=3 if i%3 else 4
-            left=column-width//2
-            top=anchor_y-height//2
-            fragment=self.text_alpha[top:top+height,left:left+width].copy()
-            if not fragment.any():
-                continue
-            field=column+.12*(anchor_y-85)
-            lo,hi=1.85,3.5
-            for _ in range(24):
-                middle=(lo+hi)/2
-                if self.beam_position(middle)<field:lo=middle
-                else:hi=middle
-            self.fragments.append(dict(alpha=fragment,x=left,y=top,birth=(lo+hi)/2,
-                                       life=.26+.025*(i%3),dy=(-1 if i%2==0 else 1)*(11+2*(i%4)),
-                                       dx=-8-2*(i%3)))
 
     def _final_native(self):
         canvas=np.zeros((*self.alpha.shape,4),np.float32)
@@ -163,7 +142,7 @@ class LightAnimation:
         return canvas
 
     def star_frame(self,t):
-        growth=.035+.965*ramp(t,.25,.95)
+        growth=.035+.965*ramp(t,.25,1.1)
         node_scale=growth**.7
         widths=.35+.65*np.sqrt(growth)
         scales=self.scales(t)
@@ -211,8 +190,9 @@ class LightAnimation:
         if t<1.85:reveal[:]=0
         pulse=np.exp(-.5*((self.field-front)/5.0)**2)*active
         fill=clamp01(self.text_alpha*(reveal+.52*pulse))
-        outline=clamp01(self.edge*.17*active)
-        glow=clamp01(self.near*(1.5*pulse+.12*active))
+        reached=clamp01((front+28-self.field)/28)
+        outline=clamp01(self.edge*.17*active*reached)
+        glow=clamp01(self.near*(1.5*pulse+.05*active*reveal))
         alpha=clamp01(fill+outline+glow)
         canvas[:,:,:3]=alpha[:,:,None]
         canvas[:,:,3]=alpha
@@ -225,16 +205,6 @@ class LightAnimation:
         over(canvas,self.star_frame(t),STAR_BOX[0],STAR_BOX[1])
         tx,ty,_,_=TEXT_BOX
         over(canvas,self.text_frame(t),tx,ty)
-        for fragment in self.fragments:
-            u=(t-fragment['birth'])/fragment['life']
-            if not 0<u<1:continue
-            opacity=.65*np.sin(np.pi*u)*(1-u)
-            alpha=fragment['alpha']*opacity
-            tile=np.dstack([alpha]*4)
-            movement=1-(1-u)**2
-            x=round(tx+fragment['x']+fragment['dx']*movement)
-            y=round(ty+fragment['y']+fragment['dy']*movement+4*u*u)
-            over(canvas,tile,x,y)
         finish=ramp(t,3.48,.22)
         if finish:
             canvas=canvas*(1-finish)+self.final_native*finish
@@ -273,7 +243,7 @@ def encode(frames,out,audio):
 
 def render():
     animation=LightAnimation(ROOT/'assets/source.png')
-    frames=ROOT/'.cache/light-frames';frames.mkdir(parents=True,exist_ok=True)
+    frames=ROOT/f'.cache/{PREFIX}-frames';frames.mkdir(parents=True,exist_ok=True)
     out=ROOT/'exports';out.mkdir(exist_ok=True)
     for n in range(150):
         animation.frame(n/FPS).save(frames/f'{n:04d}.png',compress_level=2)
@@ -282,9 +252,9 @@ def render():
     encode(frames,out,ROOT/'assets/sound-design.wav')
     info={'duration':5,'fps':30,'frames':150,'size':list(SIZE),
           'source':'assets/source.png','ray_count':10,'rotates_whole_symbol':False,
-          'radial_wave_max_amplitude':.34,'lengths_settled_at':2.5,
-          'text':'original custom letter silhouettes recolored white; light scan and temporary edge fragments',
-          'temporary_fragments':len(animation.fragments),'all_effects_gone_at':3.7,
+          'radial_wave_max_amplitude':.20,'lengths_settled_at':2.5,
+          'text':'original custom letter silhouettes recolored white; two light fronts expand from the center outward',
+          'temporary_fragments':0,'all_effects_gone_at':3.7,
           'transparent':['WebM VP9 alpha','MOV ProRes 4444 alpha','final PNG'],
           'opaque_preview':'MP4 H.264 on #14171c; not a transparent master'}
     (out/'light-render-info.json').write_text(json.dumps(info,ensure_ascii=False,indent=2)+'\n')

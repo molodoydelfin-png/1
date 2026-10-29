@@ -27,7 +27,7 @@ check('final matte excludes all raster background, including pale noisy islands'
 
 waves=np.array([a.scales(t) for t in np.linspace(.75,2.1,80)])
 check('length maximum travels through all ten directions, rather than uniform zooming',
-      len(set(np.argmax(waves,axis=1)))==10 and np.max(np.ptp(waves,axis=1))>.6)
+      len(set(np.argmax(waves,axis=1)))==10 and .25<np.max(np.ptp(waves,axis=1))<.41)
 check('all original lengths settle exactly by 2.5 s',np.array_equal(a.scales(2.5),np.ones(10)))
 for time in [.95,1.35,1.75,2.15]:
     pixels=np.asarray(a.frame(time))
@@ -42,8 +42,18 @@ final=np.asarray(a.final)
 for time in [3.7,4.,4.5,149/30,5.]:
     assert np.array_equal(np.asarray(a.frame(time)),final)
 check('all light and fragment effects are gone during a perfectly static final hold',True)
-check('eight original-glyph fragments detach and all disappear before the final hold',
-      len(a.fragments)==8 and max(f['birth']+f['life'] for f in a.fragments)<3.7)
+check('no detached fragments or particle animation layers exist',not hasattr(a,'fragments'))
+left=int(np.floor(a.beam_center))-80
+right=round(2*a.beam_center-left)
+check('light fronts travel symmetrically outwards from the visible wordmark center',
+      np.array_equal(a.field[:,left],a.field[:,right]) and a.beam_position(2.2)<a.beam_position(2.8))
+early=a.text_frame(2.25)[:,:,3]
+check('early text is revealed only near the center, not at the outer letters',
+      early.max()>.2 and early[a.field>a.beam_position(2.25)+48].max()<1e-5)
+support=nd.binary_dilation(a.text_alpha>.01,iterations=8)
+for time in [2.,2.3,2.6,2.9,3.2]:
+    assert not ((a.text_frame(time)[:,:,3]>.5/255)&~support).any()
+check('intermediate text contains no detached alpha islands away from the glyph edges',True)
 tx,ty,_,_=__import__('render_light').TEXT_BOX
 height,width=a.text_alpha.shape
 check('custom S and PROJECT silhouettes, hyphen and cuts are preserved in the final alpha',

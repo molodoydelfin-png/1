@@ -9,10 +9,10 @@
   "source": "assets/source.png",
   "ray_count": 10,
   "rotates_whole_symbol": false,
-  "radial_wave_max_amplitude": 0.34,
+  "radial_wave_max_amplitude": 0.2,
   "lengths_settled_at": 2.5,
-  "text": "original custom letter silhouettes recolored white; light scan and temporary edge fragments",
-  "temporary_fragments": 8,
+  "text": "original custom letter silhouettes recolored white; two light fronts expand from the center outward",
+  "temporary_fragments": 0,
   "all_effects_gone_at": 3.7,
   "transparent": [
     "WebM VP9 alpha",
