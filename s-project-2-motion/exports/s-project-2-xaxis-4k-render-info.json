@@ -1,0 +1,26 @@
+{
+  "duration": 5,
+  "fps": 30,
+  "frames": 150,
+  "size": [
+    3840,
+    2160
+  ],
+  "in_plane_turn_degrees": 250,
+  "x_axis_start_degrees": -62,
+  "x_axis_turn_start": 0.22,
+  "x_axis_turn_end": 3.18,
+  "projection": "perspective",
+  "perspective_focal_native_pixels": 1150,
+  "ray_proportions": "preserved in 3D before projection",
+  "independent_ray_oscillation": false,
+  "node_size_pulsation": false,
+  "cursor_rejoined_at": 3.48,
+  "final_hold_start": 3.7,
+  "matches_approved_final": true,
+  "extra_fragments": 0,
+  "text_supersampling": 4,
+  "star_supersampling": 6,
+  "preview_h264_crf": 4,
+  "alpha_master": "4K ProRes 4444 XQ-style 4:4:4 10-bit / 16-bit alpha"
+}
