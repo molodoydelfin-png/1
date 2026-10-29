@@ -15,7 +15,7 @@ import render_clean as clean
 from render_clean import CleanAnimation, ROOT, ramp
 
 
-PREFIX = 's-project-rebrand-smooth'
+PREFIX = 's-project-rebrand-discoball'
 SIZE = (3840, 2160)
 FPS = 30
 DURATION = 8
@@ -105,16 +105,16 @@ class RebrandAnimation:
         old_vectors = OLD_ENDPOINTS - OLD_CENTER
         new_vectors = self.new_endpoints - self.new_center
         vectors = old_vectors * (1-morph) + new_vectors * morph
-        contraction = 1 - .58 * np.sin(np.pi * phase)
-        vectors *= contraction
-
-        z_angle = np.deg2rad(-32 * np.sin(np.pi * phase))
-        cs, sn = np.cos(z_angle), np.sin(z_angle)
+        # One coherent 360-degree constellation turn. A restrained axial squeeze,
+        # depth scaling and moving highlights make it read as a small disco ball
+        # without ever flattening the sign into an unreadable line.
+        spin = 2*np.pi*phase
+        vectors *= 1 - .08*np.sin(np.pi*phase)**2
+        cs, sn = np.cos(spin), np.sin(spin)
         x = vectors[:, 0] * cs - vectors[:, 1] * sn
         y = vectors[:, 0] * sn + vectors[:, 1] * cs
-        x_tilt = np.deg2rad(-62 * np.sin(np.pi * phase))
-        depth = y * np.sin(x_tilt)
-        y = y * np.cos(x_tilt)
+        x *= 1 - .24*np.sin(np.pi*phase)**2
+        depth = x * .24*np.sin(np.pi*phase)
         perspective = (1150 * clean.K) / (1150 * clean.K - depth)
         projected = np.column_stack((x * perspective, y * perspective))
 
@@ -131,6 +131,9 @@ class RebrandAnimation:
         points = center + projected
         widths = np.full(10, 3.6 * 2.4) * (1-morph) + self.new_widths * morph
         radii = np.full(10, 7.1 * 2.4) * (1-morph) + self.new_radii * morph
+        depth_scale = np.clip(1 + depth/(1150*clean.K)*.42, .92, 1.08)
+        radii *= depth_scale
+        widths *= np.clip(1 + depth/(1150*clean.K)*.16, .96, 1.04)
         return center, points, widths, radii, morph
 
     def cursor_position(self, t):
@@ -157,7 +160,7 @@ class RebrandAnimation:
         return target
 
     def cursor_shape(self, t):
-        return ramp(t, DETACH + .10, .28) * (1 - ramp(t, JOIN - .30, .30))
+        return ramp(t, OUT_END - .22, .25) * (1 - ramp(t, SCAN_END, .22))
 
     @staticmethod
     def node_sprite(position, radius, foreground, material):
@@ -212,7 +215,13 @@ class RebrandAnimation:
         for index, (point, radius) in enumerate(zip(points, radii)):
             if index == 9 and DETACH <= t < JOIN:
                 continue
-            sprite, (x, y) = self.node_sprite(point, radius, foreground, material)
+            spin_phase = 2*np.pi*ramp(t, 1.20, 2.45)
+            angle = np.arctan2((self.new_endpoints-self.new_center)[index, 1],
+                               (self.new_endpoints-self.new_center)[index, 0])
+            turn_active = np.sin(np.pi*ramp(t, 1.20, 2.45))**2
+            shimmer = .5 + .5*np.cos(angle-spin_phase-.65)
+            node_material = np.clip(material*(.78+.34*shimmer*turn_active), 0, 1)
+            sprite, (x, y) = self.node_sprite(point, radius, foreground, node_material)
             layer.alpha_composite(sprite, (x-left, y-top))
         return layer, (left, top)
 
@@ -223,18 +232,41 @@ class RebrandAnimation:
         rx = radius * (1 - .86*shape)
         text_height = self.text_bounds[3] - self.text_bounds[1]
         ry = radius + (text_height*.54 - radius)*shape
-        padding = 18
-        x0 = int(np.floor(position[0]-rx-padding)); y0 = int(np.floor(position[1]-ry-padding))
-        x1 = int(np.ceil(position[0]+rx+padding)); y1 = int(np.ceil(position[1]+ry+padding))
+        flight = DETACH < t < OUT_END
+        returning = SCAN_END < t < JOIN
+        trail_strength = 0.
+        previous = position.copy()
+        if flight:
+            u = np.clip((t-DETACH)/(OUT_END-DETACH), 0, 1)
+            trail_strength = np.sin(np.pi*u)
+            previous = self.cursor_position(max(DETACH, t-.085)) * SCALE
+        elif returning:
+            u = np.clip((t-SCAN_END)/(JOIN-SCAN_END), 0, 1)
+            trail_strength = np.sin(np.pi*u)
+            previous = self.cursor_position(max(SCAN_END, t-.075)) * SCALE
+        padding = 28
+        x0 = int(np.floor(min(position[0]-rx, previous[0]-radius)-padding))
+        y0 = int(np.floor(min(position[1]-ry, previous[1]-radius)-padding))
+        x1 = int(np.ceil(max(position[0]+rx, previous[0]+radius)+padding))
+        y1 = int(np.ceil(max(position[1]+ry, previous[1]+radius)+padding))
         quality = 4
         mask = Image.new('L', ((x1-x0)*quality, (y1-y0)*quality))
         draw = ImageDraw.Draw(mask)
         cx = (position[0]-x0)*quality; cy = (position[1]-y0)*quality
+        if trail_strength > 1e-5:
+            # A tapered sequence of round dabs reads as a detached ray of light,
+            # and collapses back to the exact sphere at both handoffs.
+            start = ((previous[0]-x0)*quality, (previous[1]-y0)*quality)
+            end = ((position[0]-x0)*quality, (position[1]-y0)*quality)
+            draw.line([start, end], fill=round(75*trail_strength),
+                      width=max(1, round(radius*quality*.62)))
+            draw.line([start, end], fill=round(185*trail_strength),
+                      width=max(1, round(radius*quality*.14)))
         draw.ellipse((cx-rx*quality, cy-ry*quality,
                       cx+rx*quality, cy+ry*quality), fill=255)
         alpha = np.asarray(mask.resize((x1-x0, y1-y0), Image.Resampling.BOX),
                            dtype=np.float32) / 255
-        halo = nd.gaussian_filter(alpha, 5.0) * (.18*shape)
+        halo = nd.gaussian_filter(alpha, 5.0) * (.18*shape + .24*trail_strength)
         combined = np.clip(alpha + halo, 0, 1)
         fg = np.array(foreground, dtype=np.float32)
         rgb = np.clip(alpha[:, :, None]*fg + halo[:, :, None]*255, 0, 255)
@@ -333,6 +365,8 @@ def render():
         'cursor_detach': DETACH, 'text_conversion_start': SCAN_START,
         'text_conversion_end': SCAN_END, 'cursor_join': JOIN,
         'background_transition': [3.45, 6.55],
+        'symbol_turn': 'one rigid 360-degree turn with 24% maximum perspective squeeze',
+        'light_particle': 'one endpoint becomes a tapered light ray, rewrites the wordmark, and rejoins',
         'micro_motion': '1.8% opposing ray wave and 1.4-degree body drift during wordmark conversion',
         'exact_new_logo_hold_start': 7.0,
         'story': 'old identity contracts, unfolds in perspective, and is rewritten by one returning node'

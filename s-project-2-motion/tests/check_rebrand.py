@@ -34,6 +34,18 @@ for t in np.linspace(1.2, 3.65, 100):
     assert np.isfinite(points).all() and np.isfinite(radii).all() and radii.min() > 0
 check('ten-ray symbol rebuild remains finite and coherent through perspective motion', True)
 
+start_center, start_points, _, _, _ = a.star_state(1.2)
+middle_center, middle_points, _, _, _ = a.star_state(2.425)
+end_center, end_points, _, _, _ = a.star_state(3.65)
+start_vectors = start_points-start_center
+middle_vectors = middle_points-middle_center
+end_vectors = end_points-end_center
+check('symbol performs one coherent disco-ball turn and returns to its exact orientation',
+      np.sum(start_vectors[0]*middle_vectors[0]) < 0 and
+      np.max(np.abs(end_points-a.new_endpoints)) < 1e-6)
+check('perspective squeeze stays restrained instead of collapsing the star',
+      np.ptp(middle_points[:, 0]) > .55*np.ptp(a.new_endpoints[:, 0]))
+
 check('cursor launches from a real symbol node',
       np.array_equal(a.cursor_position(DETACH), a.star_state(DETACH)[1][9]))
 positions = np.array([a.cursor_position(t) for t in np.linspace(SCAN_START, SCAN_END, 100)])
