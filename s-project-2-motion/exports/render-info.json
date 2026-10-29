@@ -65,5 +65,6 @@
   ],
   "uniform_scale": 1.3259668508287292,
   "final_png_matches_reframed_source_exactly": true,
+  "motion": "shared radial spring; attached spheres; whole-letter and whole-word opacity, no stroke drawing or wiping",
   "note": "Original raster pixels; no replacement font, no regenerated logo. MP4 uses ordinary lossy H.264 compression."
 }

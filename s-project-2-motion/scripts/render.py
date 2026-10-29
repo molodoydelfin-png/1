@@ -42,15 +42,18 @@ def ease(t, start, duration):
     return float(u * u * u * (u * (6 * u - 15) + 10))
 
 
-def ray_progress(t, index):
-    u = np.clip((t - (.5 + index * .055)) / .805, 0, 1)
+def ray_progress(t, index=0):
+    """One shared radial spring, anchored at the original center; no angle order."""
+    u = np.clip((t - .35) / 1.9, 0, 1)
     if u <= 0:
-        return 0.0
+        return .025
     if u >= 1 - 1e-10:
         return 1.0
-    # A minute variation of velocity; no geometric overshoot or visible bounce.
-    base = u * u * u * (u * (6 * u - 15) + 10)
-    return float(np.clip(base + .008 * np.sin(4*np.pi*u) * u*u*(1-u)*(1-u), 0, 1))
+    spring = 1 - np.exp(-8*u)*(np.cos(8*u)+np.sin(8*u))
+    # Gently eliminate the remaining oscillation and its velocity at the end.
+    settle = ease(u, .78, .22)
+    spring = spring*(1-settle)+settle
+    return float(.025+.975*spring)
 
 
 class OriginalPixelAnimation:
@@ -65,37 +68,24 @@ class OriginalPixelAnimation:
         foreground = self.crop.min(axis=2) < 224
         # Fill only the background hidden behind the existing logo.
         # The actual graphic is kept in self.crop, untouched.
-        self.active = nd.binary_dilation(foreground, iterations=12)
         self.base = self._clean_background(foreground)
-        self.background_delta = self.crop.astype(np.float32) - self.base
-        self.background_delta[self.active] = 0
-        self.ys, self.xs = np.where(self.active)
-        self.x = self.xs.astype(np.float32) + x0
-        self.y = self.ys.astype(np.float32) + y0
-        self.points = np.column_stack((self.x, self.y))
-        self.delta = self.crop[self.ys, self.xs].astype(np.float32) - self.base[self.ys, self.xs]
-        self.symbol = self.x < 520
-        self.s_letter = (self.x >= 520) & (self.x < 691)
-        self.hyphen = (self.x >= 691) & (self.x < 735)
-        self.project = self.x >= 735
-        offsets = self.points - CENTER
-        self.radial = np.linalg.norm(offsets, axis=1)
-        vectors = ENDPOINTS - CENTER
-        self.lengths = np.linalg.norm(vectors, axis=1)
-        units = vectors / self.lengths[:, None]
-        distances = []
-        for unit, length in zip(units, self.lengths):
-            projection = np.clip(offsets @ unit, 0, length)
-            distances.append(np.linalg.norm(offsets - projection[:, None] * unit, axis=1))
-        self.ray_owner = np.argmin(np.stack(distances), axis=0)
-        node_distances = np.linalg.norm(self.points[:, None, :] - ENDPOINTS[None, :, :], axis=2)
-        self.node_owner = np.argmin(node_distances, axis=1)
-        self.on_node = (node_distances.min(axis=1) <= 30) & self.symbol
-        self.on_ray = self.symbol & ~self.on_node
-        self.s_clock = self._s_clock()
-        self.project_clock = np.clip((self.x - 742) / (1292 - 742), 0, 1)
-        self.symbol_local = np.zeros(self.crop.shape[:2], dtype=bool)
-        self.symbol_local[self.ys[self.symbol], self.xs[self.symbol]] = True
+        yy, xx = np.mgrid[y0:y1, x0:x1].astype(np.float32)
+        self.symbol = xx < 520
+        self.s_letter = (xx >= 520) & (xx < 691)
+        self.project = xx >= 691  # Hyphen and PROJECT are one intact fading layer.
+        # Isolate actual dark artwork, not rectangular light background patches.
+        # Signed color differences preserve the original spheres and graphite.
+        contrast = (self.base-self.crop.astype(np.float32)).mean(axis=2)
+        matte = smoothstep((contrast-3)/12)
+        self.ink = np.minimum(self.crop.astype(np.float32)-self.base,0)*matte[:,:,None]
+        # A compact moving tile with margins for the ~4.2% spring overshoot.
+        self.star_box = (30,30,383,412)
+        sx0,sy0,sx1,sy1 = self.star_box
+        self.star = self.ink[sy0:sy1,sx0:sx1].copy()
+        self.star *= self.symbol[sy0:sy1,sx0:sx1,None]
+        self.star_center = np.array([CENTER[1]-y0-sy0,CENTER[0]-x0-sx0])
+        central = ((xx-CENTER[0])**2+(yy-CENTER[1])**2)<=3.1**2
+        self.central = self.ink*central[:,:,None]
         self.reference = self._to_frame(self.source)
 
     def _clean_background(self, foreground):
@@ -124,27 +114,6 @@ class OriginalPixelAnimation:
         feather = smoothstep(edge/24)[:, :, None]
         return np.clip(repaired*feather+self.crop*(1-feather),0,255)
 
-    def _s_clock(self):
-        # A reveal guide over the ORIGINAL custom S, not a replacement outline.
-        # The three original cut strokes remain untouched in the source image.
-        guide = np.array([
-            [688, 482], [660, 484], [635, 489], [607, 499], [587, 509], [580, 514],
-            [584, 518], [581, 522], [600, 528], [623, 535], [647, 542], [664, 547],
-            [654, 554], [659, 560], [649, 569], [630, 578], [602, 587], [564, 595], [523, 598],
-        ], dtype=np.float32)
-        dense = []
-        for a, b in zip(guide[:-1], guide[1:]):
-            steps = max(2, int(np.linalg.norm(b-a)*2))
-            dense.extend(np.linspace(a, b, steps, endpoint=False))
-        dense.append(guide[-1])
-        dense = np.asarray(dense)
-        # KD tree limits memory and deterministically maps pixels to stroke time.
-        from scipy.spatial import cKDTree
-        tree = cKDTree(dense)
-        _, index = tree.query(self.points)
-        arc = np.r_[0, np.cumsum(np.linalg.norm(np.diff(dense, axis=0), axis=1))]
-        return (arc[index] / arc[-1]).astype(np.float32)
-
     def _to_frame(self, native):
         # Uniform 1920/1448 scale; crop is entirely outside the actual logo.
         # The source's presentation label at y≈940 is outside this 16:9 crop.
@@ -157,60 +126,42 @@ class OriginalPixelAnimation:
         return {
             'time': float(t),
             'rays': [ray_progress(t, i) for i in range(10)],
-            'spheres': [ease(t, 1.2+i*.075, .325) for i in range(10)],
-            's': ease(t, 2.5, .68),
-            'hyphen': ease(t, 3.05, .25),
-            'project': ease(t, 3.12, .58),
-            'settle': self.settle(t),
+            'spheres': [ease(t, .35, .55)]*10,
+            's': ease(t, 2.15, 1.15),
+            'hyphen': ease(t, 2.3, 1.25),
+            'project': ease(t, 2.3, 1.25),
+            'settle': (0.,0.),
         }
 
     @staticmethod
     def settle(t):
-        if t <= 2 or t >= 3:
-            return (0., 0.)
-        u = t - 2
-        window = np.sin(np.pi*u)**2
-        # Values in OUTPUT pixels: a single coherent, tiny translation.
-        return (float(.55*np.sin(2*np.pi*u)*window), float(-1.4*window))
-
-    def alpha(self, t):
-        state = self.state(t)
-        alpha = np.zeros(len(self.x), dtype=np.float32)
-        for i, progress in enumerate(state['rays']):
-            select = self.on_ray & (self.ray_owner == i)
-            if progress > 0:
-                alpha[select] = smoothstep((self.lengths[i]*progress - self.radial[select] + 1.1) / 2.2)
-        for i, progress in enumerate(state['spheres']):
-            alpha[self.on_node & (self.node_owner == i)] = progress
-        center = ease(t, 0, .36)
-        pulse = 1 + .035*np.sin(np.pi*np.clip(t/.5,0,1))**2
-        center_mask = self.symbol & (self.radial <= 3.1*pulse)
-        alpha[center_mask] = np.maximum(alpha[center_mask], center)
-        alpha[self.s_letter] = smoothstep((state['s']*1.11 - self.s_clock[self.s_letter])/.11)
-        alpha[self.hyphen] = state['hyphen']
-        alpha[self.project] = smoothstep((state['project']*1.15 - self.project_clock[self.project])/.15)
-        # Restore the few pale edge/background pixels that have no ray centerline
-        # gradually, not with a last-frame pop.
-        finish = ease(t, 3.5, .2)
-        alpha += (1-alpha)*finish
-        if t >= 3.7 - 1e-10:
-            # All layers fully restored. This also restores any background-edge
-            # pixels repaired during the extraction of the raster artwork.
-            alpha[:] = 1
-        return alpha
+        return (0., 0.)
 
     def frame(self, t):
-        alpha = self.alpha(t)
-        layer = self.background_delta * ease(t, 0, 3.7)
-        layer[self.ys, self.xs] = self.delta * alpha[:, None]
-        dx, dy = self.settle(t)
-        if dx or dy:
-            symbol_layer = np.where(self.symbol_local[:, :, None], layer, 0)
-            layer -= symbol_layer
-            native_scale = self.source.width / SIZE[0]
-            layer += nd.shift(symbol_layer, (dy*native_scale, dx*native_scale, 0),
-                              order=1, mode='constant', cval=0, prefilter=False)
-        pixels = np.rint(np.clip(self.base+layer, 0, 255)).astype(np.uint8)
+        if t >= 3.7-1e-10:
+            return self.reference.copy()
+        state = self.state(t)
+        scale = state['rays'][0]
+        opacity = state['spheres'][0]
+        layer = np.zeros_like(self.base)
+        if opacity:
+            inverse = 1/scale
+            matrix = np.diag([inverse,inverse,1.])
+            offset = [*(self.star_center*(1-inverse)),0.]
+            moving = nd.affine_transform(self.star,matrix,offset=offset,order=1,
+                                        mode='constant',cval=0,prefilter=False)
+            sx0,sy0,sx1,sy1 = self.star_box
+            layer[sy0:sy1,sx0:sx1] = np.minimum(moving,0)*opacity
+        # Keep the hub anchored; rays and spheres are the same moving layer.
+        layer = np.minimum(layer,self.central*ease(t,0,.35))
+        layer += self.ink*self.s_letter[:,:,None]*state['s']
+        layer += self.ink*self.project[:,:,None]*state['project']
+        composed = np.clip(self.base+layer,0,255)
+        # Once the artwork is fully in place, restore the source's very pale
+        # background texture uniformly. No ray sectors or moving white patches.
+        finish = ease(t,3.2,.5)
+        composed = composed*(1-finish)+self.crop*finish
+        pixels = np.rint(np.clip(composed, 0, 255)).astype(np.uint8)
         native = self.source.copy()
         native.paste(Image.fromarray(pixels), ROI[:2])
         return self._to_frame(native)
@@ -257,6 +208,7 @@ def render(source, destination):
         'source_crop': [0, CROP_TOP, 1448, CROP_TOP+1080*1448/1920],
         'uniform_scale': 1920/1448,
         'final_png_matches_reframed_source_exactly': True,
+        'motion': 'shared radial spring; attached spheres; whole-letter and whole-word opacity, no stroke drawing or wiping',
         'note': 'Original raster pixels; no replacement font, no regenerated logo. MP4 uses ordinary lossy H.264 compression.',
     }
     (destination.parent/'render-info.json').write_text(json.dumps(metadata,ensure_ascii=False,indent=2)+'\n')
@@ -269,6 +221,6 @@ def render(source, destination):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--source', type=Path, default=ROOT/'assets/source.png')
-    parser.add_argument('--output', type=Path, default=ROOT/'exports/s-project-2.mp4')
+    parser.add_argument('--output', type=Path, default=ROOT/'exports/s-project-2-radial.mp4')
     args = parser.parse_args()
     render(args.source, args.output)
