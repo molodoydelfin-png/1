@@ -15,7 +15,7 @@ import render_clean as clean
 from render_clean import CleanAnimation, ROOT, ramp
 
 
-PREFIX = 's-project-rebrand'
+PREFIX = 's-project-rebrand-smooth'
 SIZE = (3840, 2160)
 FPS = 30
 DURATION = 8
@@ -26,11 +26,11 @@ NEW_BG = np.array([20, 23, 28], dtype=np.float32)
 OLD_FG = np.array([9, 9, 9], dtype=np.float32)
 NEW_FG = np.array([245, 245, 245], dtype=np.float32)
 
-DETACH = 3.00
-OUT_END = 3.75
-SCAN_START = 4.00
-SCAN_END = 5.35
-JOIN = 5.80
+DETACH = 3.65
+OUT_END = 4.30
+SCAN_START = 4.50
+SCAN_END = 6.05
+JOIN = 6.65
 
 OLD_CENTER = np.array([103.2 + 203 * 2.4, 61.2 + 205 * 2.4])
 OLD_ENDPOINTS = np.array([
@@ -89,16 +89,17 @@ class RebrandAnimation:
                             occupied[1].max() + 1, occupied[0].max() + 1)
 
     def background_progress(self, t):
-        return ramp(t, SCAN_START, SCAN_END - SCAN_START)
+        return ramp(t, 3.45, 3.10)
 
     def colors(self, t):
-        progress = self.background_progress(t)
-        bg = np.rint(OLD_BG * (1-progress) + NEW_BG * progress).astype(np.uint8)
-        fg = np.rint(OLD_FG * (1-progress) + NEW_FG * progress).astype(np.uint8)
-        return tuple(bg), tuple(fg), progress
+        background_progress = self.background_progress(t)
+        foreground_progress = ramp(t, 5.05, 1.25)
+        bg = np.rint(OLD_BG * (1-background_progress) + NEW_BG * background_progress).astype(np.uint8)
+        fg = np.rint(OLD_FG * (1-foreground_progress) + NEW_FG * foreground_progress).astype(np.uint8)
+        return tuple(bg), tuple(fg), background_progress
 
     def star_state(self, t):
-        phase = ramp(t, 1.20, 2.40)
+        phase = ramp(t, 1.20, 2.45)
         morph = ramp(t, 1.45, 2.15)
         center = OLD_CENTER * (1-morph) + self.new_center * morph
         old_vectors = OLD_ENDPOINTS - OLD_CENTER
@@ -115,7 +116,19 @@ class RebrandAnimation:
         depth = y * np.sin(x_tilt)
         y = y * np.cos(x_tilt)
         perspective = (1150 * clean.K) / (1150 * clean.K - depth)
-        points = center + np.column_stack((x * perspective, y * perspective))
+        projected = np.column_stack((x * perspective, y * perspective))
+
+        # While the wordmark is being rewritten, the assembled system remains
+        # alive: one slow opposing length wave plus a sub-two-degree body drift.
+        micro = ramp(t, 3.75, .45) * (1-ramp(t, 6.05, .45))
+        if micro > 0:
+            angles = np.arctan2(new_vectors[:, 1], new_vectors[:, 0])
+            wave_phase = -1.1 + 2*np.pi*(t-3.75)/3.2
+            projected *= (1 + .018*micro*np.cos(angles-wave_phase))[:, None]
+            drift = np.deg2rad(1.4*micro*np.sin(2*np.pi*(t-3.75)/3.6))
+            dc, ds = np.cos(drift), np.sin(drift)
+            projected = projected @ np.array([[dc, ds], [-ds, dc]])
+        points = center + projected
         widths = np.full(10, 3.6 * 2.4) * (1-morph) + self.new_widths * morph
         radii = np.full(10, 7.1 * 2.4) * (1-morph) + self.new_radii * morph
         return center, points, widths, radii, morph
@@ -280,7 +293,7 @@ class RebrandAnimation:
             cursor, cursor_position = self.cursor_layer(t, foreground)
             frame.alpha_composite(cursor, cursor_position)
 
-        finish = ramp(t, 5.62, .38)
+        finish = ramp(t, 6.65, .35)
         if finish > 0:
             frame = Image.blend(frame, self.exact_final, finish)
         return frame.convert('RGB')
@@ -316,10 +329,12 @@ def render():
     animation.frame((FRAMES-1)/FPS).save(out / f'{PREFIX}-final.png')
     info = {
         'duration': DURATION, 'fps': FPS, 'frames': FRAMES, 'size': list(SIZE),
-        'audio': False, 'old_hold_end': 1.18, 'symbol_rebuild_end': 3.60,
+        'audio': False, 'old_hold_end': 1.18, 'symbol_rebuild_end': 3.65,
         'cursor_detach': DETACH, 'text_conversion_start': SCAN_START,
         'text_conversion_end': SCAN_END, 'cursor_join': JOIN,
-        'exact_new_logo_hold_start': 6.0,
+        'background_transition': [3.45, 6.55],
+        'micro_motion': '1.8% opposing ray wave and 1.4-degree body drift during wordmark conversion',
+        'exact_new_logo_hold_start': 7.0,
         'story': 'old identity contracts, unfolds in perspective, and is rewritten by one returning node'
     }
     (out / f'{PREFIX}-render-info.json').write_text(json.dumps(info, indent=2) + '\n')
