@@ -2,7 +2,9 @@
 from copy import deepcopy
 from pathlib import Path
 import hashlib
+import io
 import shutil
+import sys
 import xml.etree.ElementTree as ET
 from zipfile import ZIP_DEFLATED, ZipFile
 
@@ -11,13 +13,16 @@ from PIL import Image, ImageDraw
 
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.append(str(ROOT / '.cache/vector-libs'))
+import cairosvg
 DEST = ROOT / 'brand-assets' / 'S-PROJECT-COMPLETE'
 ARCHIVE = ROOT.parent / 'S-PROJECT-complete-brand-kit.zip'
 NS = 'http://www.w3.org/2000/svg'
 ET.register_namespace('', NS)
-SCALE = 3840 / 1448
+CANVAS = (7680, 4320)
+SCALE = CANVAS[0] / 1448
 CROP_TOP = 112.25
-PADDING = 48
+PADDING = 96
 DARK = (20, 23, 28, 255)
 
 
@@ -83,7 +88,7 @@ def padded_box(image):
     bbox = image.getchannel('A').getbbox()
     assert bbox is not None
     return (max(0, bbox[0] - PADDING), max(0, bbox[1] - PADDING),
-            min(3840, bbox[2] + PADDING), min(2160, bbox[3] + PADDING))
+            min(CANVAS[0], bbox[2] + PADDING), min(CANVAS[1], bbox[3] + PADDING))
 
 
 def save_element(folder, name, part, white_array, vector):
@@ -97,8 +102,8 @@ def save_element(folder, name, part, white_array, vector):
 
     white.save(out / f'{name}-white-transparent.png', dpi=(300, 300))
     black.save(out / f'{name}-black-transparent.png', dpi=(300, 300))
-    white_canvas.save(out / f'{name}-white-4k-transparent.png', dpi=(300, 300))
-    black_canvas.save(out / f'{name}-black-4k-transparent.png', dpi=(300, 300))
+    white_canvas.save(out / f'{name}-white-8k-transparent.png', dpi=(300, 300))
+    black_canvas.save(out / f'{name}-black-8k-transparent.png', dpi=(300, 300))
     on_background(white, DARK).save(out / f'{name}-white-on-dark.png', dpi=(300, 300))
     on_background(black, (255, 255, 255, 255)).save(
         out / f'{name}-black-on-white.png', dpi=(300, 300))
@@ -107,13 +112,13 @@ def save_element(folder, name, part, white_array, vector):
 
     for path in [out / f'{name}-white-transparent.png',
                  out / f'{name}-black-transparent.png',
-                 out / f'{name}-white-4k-transparent.png',
-                 out / f'{name}-black-4k-transparent.png']:
+                 out / f'{name}-white-8k-transparent.png',
+                 out / f'{name}-black-8k-transparent.png']:
         saved = Image.open(path).convert('RGBA')
         assert saved.getchannel('A').getbbox() is not None
         assert saved.getpixel((0, 0))[3] == 0
     assert np.array_equal(np.asarray(white)[:, :, 3], np.asarray(black)[:, :, 3])
-    print(f'{folder}: white + black, transparent PNG/SVG, 4K canvas and backgrounds')
+    print(f'{folder}: white + black, transparent PNG/SVG, 8K canvas and backgrounds')
     return white, black
 
 
@@ -157,8 +162,8 @@ def write_readme():
 В папках 01–03 находятся одинаковые наборы:
   *-white-transparent.png — белая версия без подложки;
   *-black-transparent.png — чёрная версия без подложки;
-  *-white-4k-transparent.png и *-black-4k-transparent.png — те же элементы
-    на прозрачном холсте 3840×2160 в точном положении финальной композиции;
+  *-white-8k-transparent.png и *-black-8k-transparent.png — те же элементы
+    на прозрачном холсте 7680×4320 в точном положении финальной композиции;
   *-white-transparent.svg и *-black-transparent.svg — векторные файлы без
     фона, которые можно увеличивать без потери качества;
   *-white-on-dark.png и *-black-on-white.png — готовые версии с подложкой.
@@ -193,12 +198,15 @@ def main():
         shutil.rmtree(DEST)
     DEST.mkdir(parents=True)
 
-    source = Image.open(ROOT / 'exports/s-project-2-clean-4k-final.png').convert('RGBA')
+    vector_path = ROOT / 'exports/s-project-2-clean-4k-final.svg'
+    rendered = cairosvg.svg2png(url=str(vector_path), output_width=CANVAS[0],
+                               output_height=CANVAS[1])
+    source = Image.open(io.BytesIO(rendered)).convert('RGBA')
     pixels = np.asarray(source)
-    vector = ET.parse(ROOT / 'exports/s-project-2-clean-4k-final.svg').getroot()
+    vector = ET.parse(vector_path).getroot()
 
-    # The approved raster has an empty gap between x=1369 and x=1378.
-    split = 1374
+    # Native artwork has an empty gap around x=518 between symbol and wordmark.
+    split = round(518.35 * SCALE)
     symbol = pixels.copy()
     symbol[:, split:] = 0
     wordmark = pixels.copy()

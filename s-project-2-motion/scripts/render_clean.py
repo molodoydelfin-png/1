@@ -7,6 +7,7 @@ from pathlib import Path
 import io
 import json
 import argparse
+import re
 import subprocess
 import sys
 import xml.etree.ElementTree as ET
@@ -17,6 +18,7 @@ from scipy import ndimage as nd
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.append(str(ROOT/'.cache/vector-libs'))
 import cairosvg
+from svgpathtools import parse_path
 from render import CENTER,ENDPOINTS,CROP_TOP,SIZE,FPS
 from render_light import LightAnimation,over,ramp,encode,TEXT_BOX
 
@@ -39,23 +41,43 @@ def build_wordmark(original,force=False):
     if destination.exists() and not force:return destination
     import vtracer
     cache=ROOT/'.cache';cache.mkdir(exist_ok=True)
-    # Resolve the original fractional edge at 4× before tracing. This retains
-    # even the thin intentional S cuts that native-pixel thresholding can close.
-    high=Image.fromarray(np.rint(original.text_alpha*255).astype(np.uint8)).resize((3180,720),Image.Resampling.BICUBIC)
+    # A light subpixel blur removes the source raster staircase while retaining
+    # all eleven intentional glyph pieces and cuts. Trace at 8×, then replace
+    # the hundreds of microscopic trace corners with continuous cubic curves.
+    smooth=nd.gaussian_filter(original.text_alpha.astype(np.float32),sigma=.55)
+    high=Image.fromarray(np.rint(np.clip(smooth,0,1)*255).astype(np.uint8)).resize((6360,1440),Image.Resampling.BICUBIC)
     binary=np.asarray(high)>127
     input_path=cache/'wordmark-vector-input.png'
     traced=cache/'wordmark-vector-traced.svg'
     Image.fromarray(255-binary.astype(np.uint8)*255).save(input_path)
     vtracer.convert_image_to_svg_py(str(input_path),str(traced),colormode='binary',mode='spline',
-        filter_speckle=2,corner_threshold=60,length_threshold=8.0,max_iterations=10,
-        splice_threshold=45,path_precision=4)
-    root=ET.parse(traced).getroot()
-    root.set('viewBox','0 0 795 180');root.set('width','795');root.set('height','180')
-    for path in root.iter(f'{{{SVG_NS}}}path'):path.set('fill','#ffffff')
-    scaled=ET.Element(f'{{{SVG_NS}}}g',{'transform':'scale(0.25)'})
-    for child in list(root):
-        root.remove(child);scaled.append(child)
-    root.append(scaled)
+        filter_speckle=2,corner_threshold=45,length_threshold=10.0,max_iterations=20,
+        splice_threshold=60,path_precision=5)
+    raw=ET.parse(traced).getroot()
+    root=ET.Element(f'{{{SVG_NS}}}svg',{'viewBox':'0 0 795 180','width':'795','height':'180'})
+    for element in raw.iter(f'{{{SVG_NS}}}path'):
+        parsed=parse_path(element.get('d'))
+        match=re.search(r'translate\(([-+0-9.eE]+)[, ]+([-+0-9.eE]+)\)',element.get('transform',''))
+        offset=complex(float(match.group(1)),float(match.group(2))) if match else 0j
+        commands=[]
+        for subpath in parsed.continuous_subpaths():
+            length=subpath.length()/8
+            count=max(12,int(np.ceil(length/2.4)))
+            points=np.array([(subpath.point(i/count)+offset)/8 for i in range(count)],dtype=np.complex128)
+            points=nd.gaussian_filter1d(points.real,1.25,mode='wrap')+1j*nd.gaussian_filter1d(points.imag,1.25,mode='wrap')
+            commands.append(f'M {points[0].real:.5f} {points[0].imag:.5f}')
+            for i in range(count):
+                previous=points[(i-1)%count];start=points[i]
+                end=points[(i+1)%count];following=points[(i+2)%count]
+                control1=start+(end-previous)/6
+                control2=end-(following-start)/6
+                commands.append(f'C {control1.real:.5f} {control1.imag:.5f} '
+                                f'{control2.real:.5f} {control2.imag:.5f} '
+                                f'{end.real:.5f} {end.imag:.5f}')
+            commands.append('Z')
+        ET.SubElement(root,f'{{{SVG_NS}}}path',{
+            'd':' '.join(commands),'fill':'#ffffff','fill-rule':'evenodd'})
+    assert len(root.findall(f'{{{SVG_NS}}}path'))==11
     ET.ElementTree(root).write(destination,encoding='utf-8',xml_declaration=True)
     return destination
 

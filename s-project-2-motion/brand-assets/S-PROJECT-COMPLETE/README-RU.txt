@@ -9,8 +9,8 @@ S-PROJECT — полный комплект логотипа и анимации
 В папках 01–03 находятся одинаковые наборы:
   *-white-transparent.png — белая версия без подложки;
   *-black-transparent.png — чёрная версия без подложки;
-  *-white-4k-transparent.png и *-black-4k-transparent.png — те же элементы
-    на прозрачном холсте 3840×2160 в точном положении финальной композиции;
+  *-white-8k-transparent.png и *-black-8k-transparent.png — те же элементы
+    на прозрачном холсте 7680×4320 в точном положении финальной композиции;
   *-white-transparent.svg и *-black-transparent.svg — векторные файлы без
     фона, которые можно увеличивать без потери качества;
   *-white-on-dark.png и *-black-on-white.png — готовые версии с подложкой.
